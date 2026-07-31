@@ -1,0 +1,8 @@
+/** @type {import('jest').Config} */
+module.exports = {
+  preset: 'jest-expo',
+  setupFilesAfterEnv: ['@testing-library/react-native/extend-expect'],
+  transformIgnorePatterns: [
+    'node_modules/(?!((jest-)?react-native|@react-native(-community)?|expo(nent)?|@expo(nent)?/.*|@foodstra/.*|react-navigation|@react-navigation/.*|@unimodules/.*|unimodules|sentry-expo|native-base|react-native-svg))',
+  ],
+};

@@ -1,0 +1,84 @@
+resource "aws_security_group" "alb" {
+  name        = "${local.name}-alb"
+  description = "Public HTTPS/HTTP into the load balancer"
+  vpc_id      = aws_vpc.main.id
+
+  ingress {
+    description = "HTTP"
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    description = "HTTPS"
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = { Name = "${local.name}-alb-sg" }
+}
+
+resource "aws_security_group" "api" {
+  name        = "${local.name}-api"
+  description = "API tasks — only reachable from the ALB"
+  vpc_id      = aws_vpc.main.id
+
+  ingress {
+    description     = "From ALB"
+    from_port       = 4000
+    to_port         = 4000
+    protocol        = "tcp"
+    security_groups = [aws_security_group.alb.id]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = { Name = "${local.name}-api-sg" }
+}
+
+resource "aws_security_group" "data" {
+  name        = "${local.name}-data"
+  description = "MySQL + Redis — only reachable from API tasks"
+  vpc_id      = aws_vpc.main.id
+
+  ingress {
+    description     = "MySQL from API"
+    from_port       = 3306
+    to_port         = 3306
+    protocol        = "tcp"
+    security_groups = [aws_security_group.api.id]
+  }
+
+  ingress {
+    description     = "Redis from API"
+    from_port       = 6379
+    to_port         = 6379
+    protocol        = "tcp"
+    security_groups = [aws_security_group.api.id]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = { Name = "${local.name}-data-sg" }
+}
