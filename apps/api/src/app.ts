@@ -36,7 +36,8 @@ export function createApp(): Express {
 
   app.use(express.json({ limit: '1mb' }));
 
-  app.get('/health', (_req, res) => {
+  // Both paths are served: /health for humans, /healthz for infra probes.
+  app.get(['/health', '/healthz'], (_req, res) => {
     res.json({ status: 'ok', service: 'foodstra-api', version: '0.1.0' });
   });
 

@@ -25,6 +25,8 @@ module.exports = {
     'android',
     'ios',
     '*.config.js',
+    // k6 load scripts run in the k6 JS runtime (not Node) with its own globals.
+    'infra/load',
   ],
   rules: {
     '@typescript-eslint/no-unused-vars': [

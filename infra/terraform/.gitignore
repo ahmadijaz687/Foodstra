@@ -1,0 +1,9 @@
+# Terraform working files — never commit provider binaries, state, or plans.
+.terraform/
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+*.tfvars
+!example.tfvars
