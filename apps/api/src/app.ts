@@ -1,7 +1,10 @@
 import cors from 'cors';
 import express, { type Express } from 'express';
 import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
+import { pinoHttp } from 'pino-http';
 import { getEnv } from './config/env.js';
+import { logger } from './lib/logger.js';
 import { errorHandler, notFoundHandler } from './middleware/error.js';
 import { addressRouter } from './routes/address.routes.js';
 import { authRouter } from './routes/auth.routes.js';
@@ -25,6 +28,7 @@ export function createApp(): Express {
       credentials: true,
     }),
   );
+  app.use(pinoHttp({ logger }));
 
   // Stripe webhooks need the raw body for signature verification — mount
   // before the JSON parser.
@@ -40,6 +44,20 @@ export function createApp(): Express {
   app.get(['/health', '/healthz'], (_req, res) => {
     res.json({ status: 'ok', service: 'foodstra-api', version: '0.1.0' });
   });
+
+  // Global API rate limit (per-route limiters, e.g. auth, still apply on top).
+  // Disabled under test so the suite isn't throttled.
+  if (env.NODE_ENV !== 'test') {
+    app.use(
+      '/api/v1',
+      rateLimit({
+        windowMs: 60 * 1000,
+        limit: 300,
+        standardHeaders: true,
+        legacyHeaders: false,
+      }),
+    );
+  }
 
   app.use('/api/v1/auth', authRouter);
   app.use('/api/v1/menu', menuRouter);
