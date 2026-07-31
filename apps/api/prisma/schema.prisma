@@ -1,0 +1,284 @@
+// FoodStra — MySQL primary store.
+// Redis (see REDIS_URL) is used for caching / session / rate-limiting only.
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["fullTextIndex"]
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  customer
+  vendor
+  driver
+  admin
+}
+
+enum OrderStatus {
+  placed
+  confirmed
+  preparing
+  out_for_delivery
+  delivered
+  cancelled
+}
+
+enum PaymentStatus {
+  requires_payment
+  processing
+  succeeded
+  failed
+  refunded
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  displayName  String
+  phone        String?
+  passwordHash String
+  role         UserRole @default(customer)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  addresses     Address[]
+  sessions      Session[]
+  restaurants   Restaurant[]
+  carts         Cart[]
+  orders        Order[]
+  reviews       Review[]
+  notifications Notification[]
+  pushTokens    PushToken[]
+  favorites     Favorite[]
+  driverOrders  Order[]        @relation("DriverOrders")
+
+  @@index([email])
+}
+
+model Session {
+  id                String    @id @default(cuid())
+  userId            String
+  refreshSecretHash String
+  role              UserRole
+  expiresAt         DateTime
+  revokedAt         DateTime?
+  createdAt         DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model Address {
+  id           String   @id @default(cuid())
+  userId       String
+  label        String
+  line1        String
+  line2        String?
+  city         String
+  region       String
+  postalCode   String
+  country      String   @db.Char(2)
+  latitude     Float
+  longitude    Float
+  contactPhone String?
+  isDefault    Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orders Order[]
+
+  @@index([userId])
+}
+
+model Restaurant {
+  id          String   @id @default(cuid())
+  ownerId     String
+  name        String
+  description String?  @db.Text
+  imageUrl    String?
+  cuisines    Json
+  addressLine String
+  latitude    Float
+  longitude   Float
+  isOpen      Boolean  @default(true)
+  ratingAvg   Float    @default(0)
+  ratingCount Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  owner     User       @relation(fields: [ownerId], references: [id])
+  menuItems MenuItem[]
+  orders    Order[]
+  reviews   Review[]
+  favorites Favorite[]
+
+  @@index([ownerId])
+  @@fulltext([name, description])
+}
+
+model MenuItem {
+  id           String   @id @default(cuid())
+  restaurantId String
+  name         String
+  description  String?  @db.Text
+  imageUrl     String?
+  category     String
+  priceMinor   Int
+  currency     String   @db.Char(3)
+  isAvailable  Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  restaurant Restaurant  @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  cartItems  CartItem[]
+  orderItems OrderItem[]
+
+  @@index([restaurantId])
+  @@index([category])
+  @@fulltext([name, description])
+}
+
+model Cart {
+  id           String   @id @default(cuid())
+  userId       String   @unique
+  restaurantId String?
+  currency     String   @db.Char(3)
+  updatedAt    DateTime @updatedAt
+
+  user  User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items CartItem[]
+}
+
+model CartItem {
+  id             String  @id @default(cuid())
+  cartId         String
+  menuItemId     String
+  name           String
+  unitPriceMinor Int
+  quantity       Int
+  notes          String?
+
+  cart     Cart     @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  menuItem MenuItem @relation(fields: [menuItemId], references: [id])
+
+  @@index([cartId])
+}
+
+model Order {
+  id               String      @id @default(cuid())
+  userId           String
+  restaurantId     String
+  driverId         String?
+  addressId        String
+  status           OrderStatus @default(placed)
+  currency         String      @db.Char(3)
+  subtotalMinor    Int
+  deliveryFeeMinor Int
+  taxMinor         Int
+  totalMinor       Int
+  idempotencyKey   String      @unique
+  placedAt         DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+
+  user       User        @relation(fields: [userId], references: [id])
+  restaurant Restaurant  @relation(fields: [restaurantId], references: [id])
+  driver     User?       @relation("DriverOrders", fields: [driverId], references: [id])
+  address    Address     @relation(fields: [addressId], references: [id])
+  items      OrderItem[]
+  payment    Payment?
+  review     Review?
+
+  @@index([userId])
+  @@index([restaurantId])
+  @@index([driverId])
+  @@index([status])
+}
+
+model OrderItem {
+  id             String  @id @default(cuid())
+  orderId        String
+  menuItemId     String
+  name           String
+  unitPriceMinor Int
+  quantity       Int
+  notes          String?
+
+  order    Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  menuItem MenuItem @relation(fields: [menuItemId], references: [id])
+
+  @@index([orderId])
+}
+
+model Payment {
+  id                    String        @id @default(cuid())
+  orderId               String        @unique
+  stripePaymentIntentId String        @unique
+  amountMinor           Int
+  currency              String        @db.Char(3)
+  status                PaymentStatus @default(requires_payment)
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+}
+
+model Review {
+  id           String   @id @default(cuid())
+  userId       String
+  restaurantId String
+  orderId      String   @unique
+  rating       Int
+  comment      String?  @db.Text
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user       User       @relation(fields: [userId], references: [id])
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id])
+  order      Order      @relation(fields: [orderId], references: [id])
+
+  @@index([restaurantId])
+}
+
+model Notification {
+  id          String   @id @default(cuid())
+  userId      String
+  type        String
+  title       String
+  body        String   @db.Text
+  orderId     String?
+  orderStatus String?
+  readAt      DateTime?
+  createdAt   DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model PushToken {
+  id       String @id @default(cuid())
+  userId   String
+  token    String @unique
+  platform String
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model Favorite {
+  userId       String
+  restaurantId String
+  createdAt    DateTime @default(now())
+
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  @@id([userId, restaurantId])
+}
