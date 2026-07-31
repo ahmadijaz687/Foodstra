@@ -4,9 +4,11 @@ import { createApp } from './app.js';
 import { getEnv } from './config/env.js';
 import { logger } from './lib/logger.js';
 import { registerOrderTracking } from './realtime/tracking.js';
+import { seedStore } from './store/seed.js';
 
 function main(): void {
   const env = getEnv();
+  seedStore();
   const app = createApp();
   const httpServer = createServer(app);
 

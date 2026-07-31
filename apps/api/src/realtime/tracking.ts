@@ -1,7 +1,8 @@
 import type { Server as SocketServer } from 'socket.io';
-import { DriverLocationSchema, type Order } from '@foodstra/shared';
+import { DriverLocationSchema } from '@foodstra/shared';
 import { verifyAccessToken } from '../lib/tokens.js';
 import { logger } from '../lib/logger.js';
+import { emitDriverLocation, setIo } from './hub.js';
 
 const orderRoom = (orderId: string): string => `order:${orderId}`;
 
@@ -10,6 +11,8 @@ const orderRoom = (orderId: string): string => `order:${orderId}`;
  * drivers push location updates that fan out to subscribers.
  */
 export function registerOrderTracking(io: SocketServer): void {
+  setIo(io);
+
   io.use((socket, next) => {
     const token = socket.handshake.auth?.['token'];
     if (typeof token !== 'string') {
@@ -36,18 +39,9 @@ export function registerOrderTracking(io: SocketServer): void {
     socket.on('driver:location', (payload: unknown) => {
       const parsed = DriverLocationSchema.safeParse(payload);
       if (!parsed.success || socket.data.role !== 'driver') return;
-      io.to(orderRoom(parsed.data.orderId)).emit('order:location', parsed.data);
+      emitDriverLocation(parsed.data);
     });
   });
 
   logger.info('Order tracking WebSocket registered');
-}
-
-/** Emit an order-status transition to everyone tracking the order. */
-export function emitOrderStatus(io: SocketServer, order: Order): void {
-  io.to(orderRoom(order.id)).emit('order:status', {
-    orderId: order.id,
-    status: order.status,
-    updatedAt: order.updatedAt,
-  });
 }

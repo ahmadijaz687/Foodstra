@@ -46,6 +46,7 @@ export interface DataStore {
   notifications: Map<string, Notification>;
   pushTokens: Map<string, PushTokenRecord[]>; // keyed by userId
   favorites: Map<string, Set<string>>; // userId -> set of restaurantId
+  orderIdempotency: Map<string, string>; // "userId:key" -> orderId
 }
 
 export function createEmptyStore(): DataStore {
@@ -62,5 +63,6 @@ export function createEmptyStore(): DataStore {
     notifications: new Map(),
     pushTokens: new Map(),
     favorites: new Map(),
+    orderIdempotency: new Map(),
   };
 }
